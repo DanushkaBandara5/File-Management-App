@@ -21,7 +21,7 @@ public class AppInitializer extends Application {
                 load(getClass().getResource("/scene/CopyScene.fxml"))));
         primaryStage.setTitle("File Coping Application");
         primaryStage.setResizable(false);
-        primaryStage.setHeight(250);
+        primaryStage.setHeight(300);
         primaryStage.show();
         primaryStage.centerOnScreen();
 
