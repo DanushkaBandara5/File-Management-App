@@ -1,16 +1,13 @@
 package lk.ijse.dep10.app.Controller;
 
-import javafx.application.Platform;
-import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.stage.DirectoryChooser;
-import javafx.stage.FileChooser;
+import org.apache.commons.io.FileUtils;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import javax.swing.*;
+import java.io.*;
 import java.util.Optional;
 
 public class CopySceneController {
@@ -46,65 +43,51 @@ public class CopySceneController {
     private TextField txtTarget;
     private File sourceFile;
     private File targetFolder;
+    private long totalBytes;
+    private long completedBytes;
+
     public void initialize(){
+
         prgLbl.setVisible(false);
+        btnDelete.setDisable(true);
+        btnCopy.setDisable(true);
+        btnReset.setDisable(true);
+        btnMove.setDisable(true);
     }
 
     @FXML
     void BtnDeleteOnAction(ActionEvent event) {
-        if(sourceFile!=null) {
+        if (sourceFile == null) return;
+        if (sourceFile.isFile()) {
             sourceFile.delete();
-
+            return;
         }
-
+        folderDelete(sourceFile);
     }
 
     @FXML
-    void btnCopyOnAction(ActionEvent event) throws InterruptedException {
+    void btnCopyOnAction(ActionEvent event)  {
         if(sourceFile==null || targetFolder==null){
             new Alert(Alert.AlertType.ERROR,"Enter valid Source File / Target Director to proceed").show();
         }
-        prgLbl.setVisible(true);
-        File targetFile = new File(targetFolder, sourceFile.getName());
-        if(targetFile.exists()) {
-            Optional<ButtonType> btnResult = new Alert(Alert.AlertType.CONFIRMATION, "File already Exists, do you want to proceed").showAndWait();
-            if(btnResult.isEmpty()||btnResult.get()==ButtonType.NO) return;
-        }
-
-//        btnCopy.getScene().getWindow().setHeight(325);
-//
-        Task task = new Task<Void>() {
-            @Override
-            protected Void call() throws Exception {
-                FileInputStream fis = new FileInputStream(sourceFile);
-                FileOutputStream fos = new FileOutputStream(targetFile);
-
-                double write = 0;
-
-                while (true){
-                    byte[] buffer =new byte[1024*100];
-                    int read = fis.read(buffer);
-                    if(read==-1)break;
-                    write+=read;
-                    fos.write(buffer,0,read);
-                    updateMessage(String.format("%02.1f",(double)write*100/sourceFile.length())+"% Completed");
-                    updateProgress(write,sourceFile.length());
-                }
-                fis.close();
-                fos.close();
-                return null;
+        try {
+            completedBytes=0;
+            if(sourceFile.isFile()){
+                totalBytes=sourceFile.length();
+                File file = new File(targetFolder, sourceFile.getName());
+                writeToFile(sourceFile,file);
+            }else {
+                totalBytes = FileUtils.sizeOfDirectory(sourceFile);
+                folderCopy(sourceFile,targetFolder);
             }
-        };
+            btnCopy.setDisable(true);
+            btnMove.setDisable(true);
 
-        task.exceptionProperty().addListener(observable -> {
-            task.getException().printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
             new Alert(Alert.AlertType.ERROR, "Something went wrong, please try again!").show();
-        });
-        prgLbl.textProperty().bind(task.messageProperty());
-        prgBar.progressProperty().bind(task.progressProperty());
-        Thread t1 = new Thread(task, "t1");
-        t1.start();
-        t1.join();
+
+        }
 
 
     }
@@ -113,44 +96,99 @@ public class CopySceneController {
     void btnMoveOnAction(ActionEvent event) {
         btnCopy.fire();
         btnDelete.fire();
-
-
-
+        btnCopy.setDisable(true);
+        btnMove.setDisable(true);
     }
 
     @FXML
     void btnResetOnAction(ActionEvent event) {
-        sourceFile=null;
-        targetFolder=null;
         txtSource.clear();
         txtTarget.clear();
-        prgBar.progressProperty().unbind();
+        btnDelete.setDisable(true);
+        sourceFile=null;
+        targetFolder=null;
         prgBar.setProgress(0);
-        prgLbl.textProperty().unbind();
         prgLbl.setText("");
-        prgLbl.setVisible(false);
-
-
-
     }
-
     @FXML
     void btnSourceOnAction(ActionEvent event) {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Select Source File");
-        sourceFile = fileChooser.showOpenDialog(btnSource.getScene().getWindow());
-        if(sourceFile==null)return;
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
+        chooser.showOpenDialog(null);
+        if (chooser.getSelectedFile() == null) return;
+        sourceFile = chooser.getSelectedFile();
         txtSource.setText(sourceFile.getAbsolutePath());
+        btnDelete.setDisable(false);
+        btnReset.setDisable(false);
+
+
     }
 
     @FXML
     void btnTargetOnAction(ActionEvent event) {
-        DirectoryChooser directoryChooser =new DirectoryChooser();
+        if(sourceFile==null){
+            new Alert(Alert.AlertType.ERROR,"Select a Source File First").show();
+            txtSource.requestFocus();
+            return;
+        }
+        DirectoryChooser directoryChooser = new DirectoryChooser();
         directoryChooser.setTitle("Select Folder To Copy");
         targetFolder = directoryChooser.showDialog(btnTarget.getScene().getWindow());
-        if(targetFolder==null) return;
-        txtTarget.setText(targetFolder.getAbsolutePath());
+        if (targetFolder == null) return;
+        if (targetFolder.equals(sourceFile.getParentFile())) {
+            Optional<ButtonType> btnSelect = new Alert(Alert.AlertType.CONFIRMATION, "You have selected the same folder, are you going to continue?").showAndWait();
+            if (btnSelect.get() == ButtonType.NO || btnSelect.isEmpty()) return;
+            sourceFile = new File(sourceFile.getParent(), sourceFile.getName().concat("-copy"));
+            txtSource.setText(sourceFile.getAbsolutePath());
+            txtTarget.setText(targetFolder.getAbsolutePath());
 
+        }else {
+            txtTarget.setText(targetFolder.getAbsolutePath());
+        }
+        btnMove.setDisable(false);
+        btnCopy.setDisable(false);
+    }
+    public void folderCopy(File file, File target) throws IOException {
+        File newTarget = new File(target, file.getName());
+        newTarget.mkdir();
+        File[] newArray = file.listFiles();
+        for (File file1 : newArray) {
+            if (file1.isFile()) {
+                File updatedTargetFile = new File(newTarget, file1.getName());
+                writeToFile(file1,updatedTargetFile);
+            } else if (file1.isDirectory()) {
+                folderCopy(file1, newTarget);
+            }
+        }
+
+    }
+    private void writeToFile(File source,File target) throws IOException {
+        FileInputStream fis = new FileInputStream(source);
+        FileOutputStream fos = new FileOutputStream(target);
+        while (true) {
+            byte[] bytes = new byte[1024 * 10];
+            int read = fis.read(bytes);
+            if (read == -1) break;
+            completedBytes+=read;
+            System.out.println(totalBytes);
+            fos.write(bytes, 0, read);
+            prgBar.setProgress((completedBytes*100)/totalBytes);
+        }
+        fis.close();
+        fos.close();
+    }
+    public void folderDelete(File file) {
+        File[] files = file.listFiles();
+
+        for (File file1 : files) {
+            if (file1.isFile()) {
+                file1.delete();
+            } else {
+                folderDelete(file1);
+            }
+
+        }
+        file.delete();
     }
 
 }
