@@ -1,0 +1,20 @@
+#root{
+
+    -fx-background-image:url('../images/images.jpeg');
+    -fx-background-position: center;
+    -fx-background-size: contain;
+}
+.button{
+    -fx-background-color: rgba(173, 216, 230,0.6);
+    -fx-font-weight:bold;
+}
+#lblTitle{
+    -fx-background-color: pink;
+}
+.button:hover{
+    -fx-background-color: rgba(173, 216, 230,0.85);
+
+}
+#prgLbl{
+    -fx-background-color: red;
+}
