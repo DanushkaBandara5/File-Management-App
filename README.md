@@ -21,7 +21,7 @@
 
 
 ## Technologies Used
-- JavaFX version-5.3.28
+- JavaFX version-19.0.2.1
 - Maven version-3.8.7
 - Scene Builder version 19.0.0
 
